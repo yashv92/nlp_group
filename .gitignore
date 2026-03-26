@@ -1,0 +1,22 @@
+# Data — raw and processed outputs not tracked
+data/raw/
+data/processed/
+
+# Model artefacts can be large
+outputs/models/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
