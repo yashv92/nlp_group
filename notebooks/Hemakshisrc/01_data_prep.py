@@ -1,13 +1,9 @@
 # =============================================================================
 # NLP Group Project — Women's E-Commerce Clothing Reviews
 # Section: Data Loading & EDA
-# Author: [Your Name]
 #
 # To install dependencies, run:
 #   pip install pandas matplotlib seaborn nltk
-#
-# Place "Womens Clothing E-Commerce Reviews.csv" in the same folder as this
-# script, or update DATA_PATH below.
 #
 # Outputs produced:
 #   genz_reviews.csv       — cleaned Gen Z reviews (for teammates)
@@ -15,6 +11,7 @@
 #   eda_overview.png       — age group counts, rating distribution, review length
 #   eda_age_histogram.png  — full age distribution histogram
 # =============================================================================
+pip install pandas matplotlib seaborn nltk
 
 import re
 import warnings
