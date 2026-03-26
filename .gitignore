@@ -1,9 +1,6 @@
-# Data — raw and processed outputs not tracked
-data/raw/
-data/processed/
-
-# Model artefacts can be large
-outputs/models/
+# Data and outputs — not tracked
+data/
+outputs/
 
 # Python
 __pycache__/
