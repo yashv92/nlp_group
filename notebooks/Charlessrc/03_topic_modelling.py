@@ -17,6 +17,8 @@
 #   topic_sentiment_results.csv    — t-test results table for the report
 # =============================================================================
 
+pip install pandas matplotlib seaborn nltk gensim wordcloud vaderSentiment scipy
+
 import re
 import warnings
 import pandas as pd
@@ -42,7 +44,7 @@ for pkg in ["punkt", "stopwords", "wordnet", "omw-1.4", "punkt_tab"]:
     nltk.download(pkg, quiet=True)
 
 # ---------------------------------------------------------------------------
-# Colour palette — matches nlp_1_eda.py for visual consistency
+# Colour palette — matches Task 1 for visual consistency
 # ---------------------------------------------------------------------------
 GZ_COLOR  = "#6C63FF"
 OLD_COLOR = "#FF6584"
