@@ -1,5 +1,6 @@
 # Data and outputs — not tracked
-data/
+data/raw/
+data/processed/
 outputs/
 
 # Python

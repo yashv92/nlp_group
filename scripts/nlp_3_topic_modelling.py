@@ -4,10 +4,10 @@ nlp_3_topic_modelling.py — Phase 3: Topic Modelling (LDA)
 Owner: Charles (SQBR7) | Branch: charles/topic-modelling
 
 Input:
-    data/reviews_sentiment.csv
+    data/processed/reviews_sentiment.csv
 
 Output:
-    data/reviews_topics.csv     — full dataset with topic_id and topic_label columns
+    data/processed/reviews_topics.csv     — full dataset with topic_id and topic_label columns
     outputs/lda_coherence_scores.csv
     outputs/aspect_sentiment_by_group.csv
     outputs/aspect_ttest_results.csv

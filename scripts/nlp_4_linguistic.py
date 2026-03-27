@@ -4,7 +4,7 @@ nlp_4_linguistic.py — Phase 4: Linguistic Analysis & Age Group Classifier
 Owner: Yash (SSSP0) | Branch: yash/linguistic-classifier
 
 Input:
-    data/reviews_topics.csv
+    data/processed/reviews_topics.csv
 
 Output:
     outputs/linguistic_features_summary.csv
