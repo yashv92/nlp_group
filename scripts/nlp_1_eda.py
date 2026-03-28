@@ -8,6 +8,9 @@ Input:
 
 Output:
     data/processed/reviews_clean.csv    — full cleaned dataset
+                                          columns include both:
+                                            review_text       — original text (punctuation + capitalisation preserved)
+                                            review_text_clean — lowercased, punctuation-removed version for NLP
     data/processed/reviews_genz.csv     — Gen Z reviews only (ages 18-26)
     data/processed/reviews_older.csv    — older reviews only (ages 27+)
     outputs/eda_review_length_dist.png
@@ -90,13 +93,18 @@ def clean_text(text: str) -> str:
 
 print("Cleaning text …")
 df = df.dropna(subset=[TEXT_COL])
-df[TEXT_COL] = [clean_text(t) for t in tqdm(df[TEXT_COL], desc="  clean")]
-df = df.drop_duplicates(subset=[TEXT_COL]).reset_index(drop=True)
-df["word_count"] = df[TEXT_COL].str.split().str.len()
+
+# Preserve original text — punctuation and capitalisation intact.
+# Downstream scripts (Phase 4) use this for linguistic feature extraction.
+df["review_text_clean"] = [clean_text(t) for t in tqdm(df[TEXT_COL], desc="  clean")]
+
+# Deduplication and length filter operate on the cleaned version
+df = df.drop_duplicates(subset=["review_text_clean"]).reset_index(drop=True)
+df["word_count"] = df["review_text_clean"].str.split().str.len()
 df = df[df["word_count"] >= 10].reset_index(drop=True)
 
-# Keep only required columns
-KEEP_COLS = [TEXT_COL, "rating", "age", "age_group",
+# Keep only required columns — review_text is the original, review_text_clean is normalised
+KEEP_COLS = [TEXT_COL, "review_text_clean", "rating", "age", "age_group",
              "clothing_id", "division_name", "department_name",
              "class_name", "recommended_ind"]
 KEEP_COLS = [c for c in KEEP_COLS if c in df.columns]
@@ -108,8 +116,8 @@ old_df = df[df["age_group"] == "older"].reset_index(drop=True)
 # =============================================================================
 # 4. SUMMARY
 # =============================================================================
-gz_wc  = gz_df[TEXT_COL].str.split().str.len()
-old_wc = old_df[TEXT_COL].str.split().str.len()
+gz_wc  = gz_df["review_text_clean"].str.split().str.len()
+old_wc = old_df["review_text_clean"].str.split().str.len()
 
 print(f"\nTotal reviews after cleaning : {len(df):,}")
 print(f"Gen Z reviews                : {len(gz_df):,}")
@@ -131,10 +139,10 @@ print(f"\nSaved CSVs to {PROC_DIR}/")
 FIG_KW = dict(figsize=(10, 6), dpi=150)
 PALETTE = {"gen_z": "#6C63FF", "older": "#FF6584"}
 
-# — Figure 1: review length distribution
+# — Figure 1: review length distribution (word counts from clean version)
 fig, ax = plt.subplots(**FIG_KW)
 for label, subset in [("gen_z", gz_df), ("older", old_df)]:
-    ax.hist(subset[TEXT_COL].str.split().str.len().clip(upper=300),
+    ax.hist(subset["review_text_clean"].str.split().str.len().clip(upper=300),
             bins=40, alpha=0.6, label=label, color=PALETTE[label], edgecolor="none")
 ax.set_title("Review Length Distribution by Age Group")
 ax.set_xlabel("Word Count")
@@ -173,12 +181,12 @@ ax.set_ylabel("Number of Reviews")
 fig.savefig(OUT_DIR / "eda_age_group_counts.png", bbox_inches="tight")
 plt.close(fig)
 
-# — Figure 4 & 5: word clouds
+# — Figure 4 & 5: word clouds (use clean version — lowercase, no punctuation)
 for label, subset, fname in [
     ("gen_z",  gz_df,  "eda_wordcloud_genz.png"),
     ("older",  old_df, "eda_wordcloud_older.png"),
 ]:
-    text = " ".join(subset[TEXT_COL])
+    text = " ".join(subset["review_text_clean"])
     wc = WordCloud(width=800, height=400, background_color="white",
                    colormap="cool", max_words=100,
                    random_state=42).generate(text)
