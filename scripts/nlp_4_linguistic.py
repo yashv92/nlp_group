@@ -7,6 +7,14 @@ Input:
     data/processed/reviews_topics.csv   (preferred — output of Phase 3)
     data/processed/reviews_clean.csv    (fallback — output of Phase 1)
 
+    Both files must contain:
+        review_text       — original text (punctuation + capitalisation preserved)
+        review_text_clean — lowercased, punctuation-removed version
+        age_group         — gen_z or older
+
+    review_text is used for linguistic feature extraction (punctuation, caps, sentences).
+    review_text_clean is used for TF-IDF and classification.
+
 Output:
     outputs/linguistic_features_summary.csv  — mean/std of all features by age group
     outputs/linguistic_ttest_results.csv     — t-test results per feature
@@ -82,15 +90,21 @@ else:
     print("ERROR: Run nlp_1_eda.py first")
     sys.exit(1)
 
-# Normalise column names to lowercase with underscores for internal use,
-# but keep the original column reference for the text column.
+# Map normalised column names back to actual column names in the file
 col_lower = {c.lower().replace(" ", "_"): c for c in df.columns}
-TEXT_COL  = col_lower.get("review_text")
+TEXT_COL  = col_lower.get("review_text")        # original — used for linguistic features
+CLEAN_COL = col_lower.get("review_text_clean")  # cleaned  — used for TF-IDF & classification
 GROUP_COL = col_lower.get("age_group")
 
 if TEXT_COL is None or GROUP_COL is None:
     print(f"ERROR: Expected 'review_text' and 'age_group' columns. Found: {list(df.columns)}")
     sys.exit(1)
+
+# If review_text_clean is absent (old CSV), fall back to review_text for NLP tasks
+if CLEAN_COL is None:
+    print("  Warning: 'review_text_clean' column not found — re-run nlp_1_eda.py to regenerate CSVs.")
+    print("  Falling back to 'review_text' for TF-IDF and classification.")
+    CLEAN_COL = TEXT_COL
 
 df = df.dropna(subset=[TEXT_COL, GROUP_COL]).reset_index(drop=True)
 df[GROUP_COL] = df[GROUP_COL].str.strip().str.lower()
@@ -170,7 +184,7 @@ print("\n--- Part 2: TF-IDF Vocabulary Analysis ---")
 
 tfidf_rows = []
 for grp in ["gen_z", "older"]:
-    texts = df[df[GROUP_COL] == grp][TEXT_COL].tolist()
+    texts = df[df[GROUP_COL] == grp][CLEAN_COL].tolist()
     vec   = TfidfVectorizer(max_features=5000, stop_words="english")
     mat   = vec.fit_transform(texts)
     means = np.asarray(mat.mean(axis=0)).flatten()
@@ -188,7 +202,7 @@ print("  Saved: tfidf_top_terms.csv")
 print("\n--- Part 3: Classification ---")
 
 vec_clf = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
-X = vec_clf.fit_transform(df[TEXT_COL])
+X = vec_clf.fit_transform(df[CLEAN_COL])
 y = (df[GROUP_COL] == "gen_z").astype(int)   # 1 = gen_z, 0 = older
 
 X_train, X_test, y_train, y_test = train_test_split(
