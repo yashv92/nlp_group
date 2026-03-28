@@ -157,9 +157,9 @@ The dataset columns are: `Clothing ID`, `Age`, `Title`, `Review Text`, `Rating`,
 
 ## Phase 2 — Sentiment Analysis (`scripts/nlp_2_sentiment.py`)
 
-**Owner:** Prishita (WDYF5) | **Branch:** `prishita/sentiment`  
-**Input:** `data/reviews_clean.csv`  
-**Output:** `data/reviews_sentiment.csv`, figures, stats table
+**Owner:** Prishita (WDYF5) | **Branch:** `prishita/sentiment`
+**Input:** `data/processed/reviews_clean.csv`
+**Output:** `data/reviews_sentiment.csv`, figures, stats tables
 
 ### What to implement
 
@@ -167,30 +167,45 @@ The dataset columns are: `Clothing ID`, `Age`, `Title`, `Review Text`, `Rating`,
    - Use `vaderSentiment.SentimentIntensityAnalyzer`
    - For each review compute: `vader_pos`, `vader_neg`, `vader_neu`, `vader_compound`
    - The compound score (−1 to +1) is the primary sentiment score
+   - Also compute `vader_intensity` = `|vader_compound|` (emotional strength regardless of direction)
 
 2. **DistilBERT sentiment:**
    - Load `distilbert-base-uncased-finetuned-sst-2-english` from HuggingFace `transformers`
-   - Process in batches of 32; truncate reviews to 512 tokens
+   - Process in batches of 8 on CPU; truncate reviews to 64 tokens
    - Output columns: `distilbert_label` (POSITIVE/NEGATIVE) and `distilbert_score` (confidence 0–1)
    - Add `distilbert_compound`: POSITIVE → score, NEGATIVE → −score (range −1 to +1)
+   - Add `distilbert_intensity` = `|distilbert_compound|`
    - Wrap the model call in try/except — if GPU/memory fails, fall back to CPU with batch size 8
 
 3. **Statistical testing:**
-   - Run independent t-tests (`scipy.stats.ttest_ind`) comparing Gen Z vs older for `vader_compound` and `distilbert_compound`
-   - Save to `outputs/sentiment_ttest_results.csv` with columns: `metric`, `t_stat`, `p_value`, `significant` (True if p < 0.05), `gen_z_mean`, `older_mean`
+   - Run independent t-tests (`scipy.stats.ttest_ind`) comparing Gen Z vs older for `vader_compound`, `vader_intensity`, `distilbert_compound`, `distilbert_intensity`
+   - Save to `outputs/sentiment_ttest_results.csv` with columns: `metric`, `t_stat`, `p_value`, `significant` (True if p < 0.05), `cohens_d`, `effect_size`, `gen_z_mean`, `older_mean`
 
-4. **Figures** — save to `outputs/`:
-   - `sentiment_vader_boxplot.png` — box plot of `vader_compound` by age group
-   - `sentiment_distilbert_boxplot.png` — box plot of `distilbert_compound` by age group
+4. **Model agreement analysis:**
+   - Compare VADER and DistilBERT labels (POSITIVE/NEGATIVE)
+   - Save overall agreement rate and Pearson r to `outputs/sentiment_model_agreement.csv`
+   - Save agreement rate broken down by age group to `outputs/sentiment_model_agreement_by_group.csv`
+
+5. **Sentiment by department:**
+   - Group by `department_name` and `age_group`
+   - Compute mean VADER compound and intensity per group
+   - Save to `outputs/sentiment_by_department.csv`
+
+6. **Figures** — save to `outputs/`:
+   - `sentiment_vader_boxplot.png` — box plot of `vader_compound` by age group (with mean annotations)
+   - `sentiment_distilbert_boxplot.png` — box plot of `distilbert_compound` by age group (with mean annotations)
    - `sentiment_compound_hist.png` — overlaid histogram of compound scores by age group (2-panel subplot)
    - `sentiment_rating_correlation.png` — scatter plot of `vader_compound` vs `Rating`, coloured by age group
+   - `sentiment_intensity_boxplot.png` — side-by-side boxplots of `|compound|` for both models
+   - `sentiment_model_agreement_scatter.png` — VADER vs DistilBERT compound scatter with Pearson r
+   - `sentiment_by_department.png` — grouped bar chart of mean VADER sentiment per department × age group
 
-5. Save the dataframe with all new sentiment columns to `data/reviews_sentiment.csv`
+7. Save the dataframe with all new sentiment columns to `data/reviews_sentiment.csv`
 
 ### Acceptance criteria
-- All four sentiment columns present in output CSV
-- t-test results CSV has exactly 2 rows
-- All 4 figures exist
+- All sentiment columns present in output CSV (`vader_pos`, `vader_neg`, `vader_neu`, `vader_compound`, `vader_intensity`, `distilbert_label`, `distilbert_score`, `distilbert_compound`, `distilbert_intensity`)
+- t-test results CSV has 4 rows (one per metric tested)
+- All 7 figures exist in `outputs/`
 - Script completes in under 30 minutes on CPU
 
 ---
