@@ -54,6 +54,7 @@ from sklearn.metrics import (
 from tqdm import tqdm
 
 warnings.filterwarnings("ignore")
+# Fix random seed for reproducibility — ensures train/test splits and RF are identical across runs
 np.random.seed(42)
 sns.set_style("whitegrid")
 
@@ -118,13 +119,51 @@ print(f"  Rows: {len(df):,}  |  Gen Z: {(df[GROUP_COL]=='gen_z').sum():,}  |  Ol
 print("\n--- Part 1: Linguistic Feature Extraction ---")
 
 def extract_features(text: str) -> dict:
+    """
+    Extract surface-level linguistic features from a single review string.
+
+    These features capture stylistic and structural properties of writing that
+    may differ between age groups — e.g. Gen Z reviewers may use more emphatic
+    punctuation or shorter sentences, while older reviewers may write more
+    formally with greater lexical variety.
+
+    Parameters
+    ----------
+    text : str
+        The original (uncleaned) review text, with punctuation and capitalisation
+        preserved. Do NOT pass the lowercased/cleaned version — several features
+        (exclamation_count, caps_word_count, question_count) depend on the original.
+
+    Returns
+    -------
+    dict with keys:
+        word_count        — total tokens; proxy for review verbosity
+        char_count        — total characters excluding spaces
+        sentence_count    — number of sentences; shorter sentences may suggest
+                            informal writing style
+        avg_word_length   — mean characters per token; correlates with vocabulary
+                            sophistication (longer words tend to be less common)
+        exclamation_count — raw count of '!' characters; marker of emotional intensity
+        caps_word_count   — count of ALL-CAPS content words (>=2 chars, non-stopword);
+                            caps are used for emphasis in informal writing
+        type_token_ratio  — unique_words / total_words; a standard measure of lexical
+                            diversity (TTR). Higher TTR = less repetition. Note: TTR
+                            decreases naturally as text length increases, so interpret
+                            alongside word_count.
+        question_count    — raw count of '?' characters; questions may indicate
+                            uncertainty or engagement with the reader
+    """
     words     = str(text).split()
-    total_w   = max(len(words), 1)
+    total_w   = max(len(words), 1)   # guard against empty reviews causing division by zero
     unique_w  = len(set(w.lower() for w in words))
     chars_ns  = sum(len(w) for w in words)
     sentences = sent_tokenize(str(text))
-    caps_w    = [w for w in words
-                 if len(w) >= 2 and w.isupper() and w.lower() not in STOP_WORDS]
+
+    # Require len >= 2 to exclude single-letter tokens ("I", "A") which are
+    # technically all-caps but carry no emphatic meaning
+    caps_w = [w for w in words
+              if len(w) >= 2 and w.isupper() and w.lower() not in STOP_WORDS]
+
     return {
         "word_count"        : len(words),
         "char_count"        : chars_ns,
@@ -156,7 +195,11 @@ for grp in ["gen_z", "older"]:
 pd.DataFrame(summary_rows).to_csv(OUT_DIR / "linguistic_features_summary.csv", index=False)
 print("  Saved: linguistic_features_summary.csv")
 
-# T-tests
+# Independent-samples t-tests: do Gen Z and older reviewers differ on each feature?
+# H0: the population means are equal (no difference between age groups).
+# We use Welch's t-test (equal_var=False) rather than Student's t-test because
+# our two groups are very different sizes (~1,600 Gen Z vs ~20,800 older), which
+# makes the equal-variance assumption of Student's test unreliable.
 gz_sub  = df[df[GROUP_COL] == "gen_z"]
 old_sub = df[df[GROUP_COL] == "older"]
 
@@ -169,6 +212,9 @@ for f in FEATURES:
         "older_mean"  : round(old_sub[f].mean(), 4),
         "t_stat"      : round(t, 4),
         "p_value"     : round(p, 4),
+        # Alpha = 0.05 is the conventional threshold for statistical significance;
+        # a p-value below this means we reject H0 and treat the group difference
+        # as unlikely to be due to chance alone
         "significant" : p < 0.05,
     })
 
@@ -182,11 +228,24 @@ print(ttest_df[["feature", "gen_z_mean", "older_mean", "p_value", "significant"]
 # ============================================================================
 print("\n--- Part 2: TF-IDF Vocabulary Analysis ---")
 
+# TF-IDF (Term Frequency–Inverse Document Frequency) weights a term by how often
+# it appears in a document (TF) relative to how many documents it appears in (IDF).
+# Terms that are common within one group but rare overall get high scores — these
+# are the vocabulary items most characteristic of that group's writing.
+#
+# We fit a separate vectorizer on each age group rather than on the full corpus.
+# Fitting on the full corpus would give IDF weights that reflect corpus-wide
+# frequency, which would suppress terms that happen to be common in both groups
+# even if one group uses them far more. Group-specific fitting isolates each
+# group's vocabulary profile.
 tfidf_rows = []
 for grp in ["gen_z", "older"]:
     texts = df[df[GROUP_COL] == grp][CLEAN_COL].tolist()
     vec   = TfidfVectorizer(max_features=5000, stop_words="english")
     mat   = vec.fit_transform(texts)
+    # Mean TF-IDF score across all documents in the group: terms with high mean
+    # scores are both distinctive (high IDF) and frequently used (high TF) within
+    # this group — a reliable proxy for group-characteristic vocabulary
     means = np.asarray(mat.mean(axis=0)).flatten()
     top30 = means.argsort()[::-1][:30]
     terms = np.array(vec.get_feature_names_out())[top30]
@@ -201,15 +260,31 @@ print("  Saved: tfidf_top_terms.csv")
 # ============================================================================
 print("\n--- Part 3: Classification ---")
 
+# Represent each review as a sparse TF-IDF vector.
+# ngram_range=(1, 2) includes both unigrams and bigrams. Bigrams capture short
+# phrases and help with negation (e.g. "not great" is one feature, not two
+# separate words that cancel each other out). max_features=5000 keeps the
+# feature space manageable given the ~22k document corpus.
 vec_clf = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
 X = vec_clf.fit_transform(df[CLEAN_COL])
-y = (df[GROUP_COL] == "gen_z").astype(int)   # 1 = gen_z, 0 = older
 
+# Binary target: 1 = Gen Z (ages 18–26), 0 = older (ages 27+)
+y = (df[GROUP_COL] == "gen_z").astype(int)
+
+# Stratified split preserves the original class ratio (~7% Gen Z) in both
+# the training and test sets. Without stratification, random sampling could
+# produce a test set with very few Gen Z examples, making evaluation unreliable.
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, stratify=y, random_state=RANDOM_STATE
 )
 
-def save_report(y_true, y_pred, path: Path):
+def save_report(y_true, y_pred, path: Path) -> dict:
+    """
+    Compute a per-class classification report and save it to CSV.
+
+    Returns the report as a dict so callers can extract per-class metrics
+    (precision, recall, F1) for the comparison table.
+    """
     report = classification_report(
         y_true, y_pred,
         target_names=["older", "gen_z"],
@@ -218,7 +293,16 @@ def save_report(y_true, y_pred, path: Path):
     pd.DataFrame(report).transpose().to_csv(path)
     return report
 
-# Logistic Regression
+# --- Model 1: Logistic Regression ---
+# LR is included because its coefficients are directly interpretable: a positive
+# coefficient on a term means that term's presence pushes the model toward
+# predicting Gen Z; a negative coefficient pushes toward older. This gives us
+# an explainable vocabulary-level signal to discuss in the write-up.
+#
+# class_weight='balanced' reweights each training sample inversely proportional
+# to its class frequency. Without this, a model trained on ~93% older reviews
+# could achieve 93% accuracy by always predicting "older" — the weighting forces
+# the model to treat Gen Z and older errors equally during training.
 print("  Training Logistic Regression …")
 lr = LogisticRegression(max_iter=1000, C=1.0, class_weight="balanced",
                         random_state=RANDOM_STATE)
@@ -228,7 +312,12 @@ y_proba_lr = lr.predict_proba(X_test)[:, 1]
 report_lr  = save_report(y_test, y_pred_lr, OUT_DIR / "clf_logistic_report.csv")
 print("  Saved: clf_logistic_report.csv")
 
-# Random Forest
+# --- Model 2: Random Forest ---
+# RF is a non-linear ensemble that can capture interactions between features
+# that LR cannot (e.g. a term that is distinctive only in combination with
+# another term). It serves as a performance upper bound to test whether the
+# linear assumption of LR is a bottleneck. class_weight='balanced' applied for
+# the same imbalance reason as LR above.
 print("  Training Random Forest …")
 rf = RandomForestClassifier(n_estimators=100, random_state=RANDOM_STATE,
                              class_weight="balanced")
@@ -239,7 +328,8 @@ report_rf  = save_report(y_test, y_pred_rf, OUT_DIR / "clf_rf_report.csv")
 print("  Saved: clf_rf_report.csv")
 
 # Comparison CSV
-def row_from_report(report_dict, model_name):
+def row_from_report(report_dict: dict, model_name: str) -> dict:
+    """Extract per-class precision, recall, and F1 into a flat dict for the comparison CSV."""
     return {
         "model"           : model_name,
         "accuracy"        : round(report_dict["accuracy"], 4),
@@ -265,7 +355,11 @@ print(comparison_df.to_string(index=False))
 print("\n--- Part 4: Figures ---")
 
 # Figure 1: z-score normalised feature comparison
-# Normalise each group mean by the overall feature mean/std across all rows
+# The eight features are on very different scales (word_count ~60, exclamation_count ~0.7).
+# Plotting raw means side-by-side would make the chart unreadable — small-scale
+# features would be invisible next to large-scale ones. We normalise each group
+# mean by the overall feature mean and std, so the y-axis represents standard
+# deviations from the corpus average, making all features directly comparable.
 z_gz, z_old = [], []
 for f in FEATURES:
     mu    = df[f].mean()
@@ -353,10 +447,16 @@ for model_name, y_pred, fname in [
     print(f"  Saved: {fname}")
 
 # Figure 7: LR top 20 coefficients per class
+# In a binary logistic regression, the single coefficient vector (lr.coef_[0])
+# represents log-odds of the positive class (Gen Z = 1).
+# A large positive coefficient means that term strongly predicts Gen Z.
+# A large negative coefficient means that term strongly predicts older.
+# This gives us a direct, interpretable window into which vocabulary is most
+# diagnostic of each age group — something Random Forest cannot provide.
 feature_names = np.array(vec_clf.get_feature_names_out())
 coefs         = lr.coef_[0]
-top_pos = coefs.argsort()[-20:][::-1]   # strongest gen_z predictors
-top_neg = coefs.argsort()[:20]          # strongest older predictors
+top_pos = coefs.argsort()[-20:][::-1]   # highest positive log-odds → gen_z predictors
+top_neg = coefs.argsort()[:20]          # most negative log-odds → older predictors
 top_idx = np.concatenate([top_pos, top_neg])
 top_coefs = coefs[top_idx]
 top_terms = feature_names[top_idx]
@@ -375,6 +475,12 @@ plt.close(fig)
 print("  Saved: clf_feature_importance_lr.png")
 
 # Figure 8: ROC curves
+# The ROC curve plots True Positive Rate (recall for Gen Z) against False Positive
+# Rate at every classification threshold. AUC (area under the curve) summarises
+# the model's ability to rank Gen Z reviews above older reviews regardless of
+# threshold — AUC = 0.5 is random, AUC = 1.0 is perfect.
+# AUC is a better summary metric than accuracy here because accuracy is dominated
+# by the majority class (older) and can be misleadingly high.
 fpr_lr, tpr_lr, _ = roc_curve(y_test, y_proba_lr)
 fpr_rf, tpr_rf, _ = roc_curve(y_test, y_proba_rf)
 auc_lr = auc(fpr_lr, tpr_lr)
