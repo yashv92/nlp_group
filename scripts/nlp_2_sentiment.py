@@ -77,7 +77,7 @@ PROC_DIR.mkdir(parents=True, exist_ok=True)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 CLEAN_CSV     = PROC_DIR / "reviews_clean.csv"
-SENTIMENT_CSV = ROOT / "data" / "reviews_sentiment.csv"
+SENTIMENT_CSV = PROC_DIR / "reviews_sentiment.csv"
 
 # ---------------------------------------------------------------------------
 # If Phase 1 output missing, build it inline from raw CSV
@@ -536,7 +536,7 @@ print(f"Saved sentiment dataset → {SENTIMENT_CSV}")
 # DONE
 # =============================================================================
 created = [
-    "data/reviews_sentiment.csv",
+    "data/processed/reviews_sentiment.csv",
     "outputs/sentiment_ttest_results.csv",
     "outputs/sentiment_model_agreement.csv",
     "outputs/sentiment_model_agreement_by_group.csv",

@@ -1,5 +1,5 @@
 metric,t_stat,p_value,significant,cohens_d,effect_size,gen_z_mean,older_mean
-vader_compound,2.5756,0.010084,True,0.0649,negligible,0.7627,0.7392
-vader_intensity,3.5064,0.000465,True,0.0863,negligible,0.81,0.7898
-distilbert_compound,0.2588,0.796139,False,0.0229,negligible,0.3801,0.3595
-distilbert_intensity,-0.3767,0.706961,False,-0.038,negligible,0.9623,0.9655
+vader_compound,2.9075,0.003686,True,0.0729,negligible,0.7665,0.7397
+vader_intensity,3.972,7.4e-05,True,0.0973,negligible,0.8158,0.7935
+distilbert_compound,-0.5714,0.568574,False,-0.0524,negligible,0.4031,0.4486
+distilbert_intensity,0.7921,0.42945,False,0.0591,negligible,0.9786,0.9744
