@@ -99,6 +99,16 @@ python scripts/nlp_5_evaluation.py
 
 Each script prints a `[DONE]` message at the end listing files it created. If a required input file is missing, it will print a clear error message telling you which script to run first.
 
+### Alternative: run everything in one place
+
+Instead of running the scripts separately, you can run the entire pipeline end-to-end using the unified Jupyter notebook:
+
+```
+notebooks/nlp_group_analysis.ipynb
+```
+
+Open it in VS Code, then **Run All Cells**. It executes all 5 phases in sequence — each section feeds its outputs directly into the next — so you get the full analysis in a single run without switching between scripts.
+
 ---
 
 ## Phase 1 — Data Loading & EDA (`scripts/nlp_1_eda.py`)

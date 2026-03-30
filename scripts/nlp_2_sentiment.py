@@ -108,12 +108,12 @@ if not CLEAN_CSV.exists():
         return text
 
     raw = raw.dropna(subset=[TEXT_COL_RAW])
-    raw[TEXT_COL_RAW] = [_clean(t) for t in tqdm(raw[TEXT_COL_RAW], desc="  clean")]
-    raw = raw.drop_duplicates(subset=[TEXT_COL_RAW]).reset_index(drop=True)
-    raw["word_count"] = raw[TEXT_COL_RAW].str.split().str.len()
+    raw["review_text_clean"] = [_clean(t) for t in tqdm(raw[TEXT_COL_RAW], desc="  clean")]
+    raw = raw.drop_duplicates(subset=["review_text_clean"]).reset_index(drop=True)
+    raw["word_count"] = raw["review_text_clean"].str.split().str.len()
     raw = raw[raw["word_count"] >= 10].reset_index(drop=True)
 
-    keep = [TEXT_COL_RAW, "rating", "age", "age_group",
+    keep = [TEXT_COL_RAW, "review_text_clean", "rating", "age", "age_group",
             "clothing_id", "division_name", "department_name",
             "class_name", "recommended_ind"]
     keep = [c for c in keep if c in raw.columns]
